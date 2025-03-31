@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
 
 # HTTP status codes for responses
 SUCCESS = 200
@@ -13,48 +12,36 @@ EXTERNAL_ERROR = 502
 # Create a Flask application instance
 app = Flask(__name__)
 
-# Configuring the database URI and disabling modification tracking for SQLAlchemy
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:your_passsword@localhost/products'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Creae an instance of SQLAlchemy to interact with the database
-db = SQLAlchemy(app)
-
-# Define the Product model (table) in the database
-class Product(db.Model):
-    __tablename__ = 'products' 
-
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name = db.Column(db.String(255), nullable=False)
-    vend = db.Column(db.String(255), nullable=False)
-    vend_address= db.Column(db.String(255))
-    quantity = db.Column(db.Integer, nullable=False)
-    address = db.Column(db.String(255))
-    price_unit = db.Column(db.Float, nullable=False)
+# Mock product data
+mock_products = [
+    {
+        "id": 1,
+        "name": "Product 1",
+        "vend": "Vendor 1",
+        "vend_address": "Address 1",
+        "quantity": 100,
+        "address": "Warehouse 1",
+        "price_unit": 15.99
+    },
+    {
+        "id": 2,
+        "name": "Product 2",
+        "vend": "Vendor 2",
+        "vend_address": "Address 2",
+        "quantity": 200,
+        "address": "Warehouse 2",
+        "price_unit": 25.99
+    }
+]
 
 # Route to handle GET requests and retrieve all products 
 @app.route("/products", methods=["GET"])
 def get_product():
     try: 
-        products = Product.query.all()
-
-        if not products:
+        if not mock_products:
             return jsonify({"message": "No products found"}), NOT_FOUND
         
-        return jsonify({
-            "products": [
-                {
-                    "id": product.id,
-                    "name": product.name,
-                    "vend:": product.vend,
-                    "vend_address": product.vend_address,
-                    "quantity": product.quantity,
-                    "address": product.address,
-                    "price_unit": product.price_unit
-                }
-                for product in products
-            ]
-        }), SUCCESS
+        return jsonify({"products": mock_products}), SUCCESS
     except Exception as e:
         return jsonify({"message": "Internal server error", "error": str(e)}), INTERNAL_ERROR
 
@@ -67,27 +54,19 @@ def post_product():
         if not all(key in data for key in ["name", "vend", "quantity", "price_unit"]):
             return jsonify({"message": "Missing required fields"}), BAD_REQUEST
 
-        new_product = Product(
-            name=data['name'],
-            vend=data['vend'],
-            vend_address=['vend_address'],
-            quantity=data['quantity'],
-            address=data['address'],
-            price_unit=data['price_unit']
-        )
+        new_product = {
+            "id": len(mock_products) + 1,
+            "name": data['name'],
+            "vend": data['vend'],
+            "vend_address": data.get('vend_address', None),
+            "quantity": data['quantity'],
+            "address": data.get('address', None),
+            "price_unit": data['price_unit']
+        }
 
-        db.session.add(new_product)
-        db.session.commit()
+        mock_products.append(new_product)
 
-        return jsonify({
-            "id": new_product.id,
-            "name": new_product.name,
-            "vend": new_product.vend,
-            "vend_address": new_product.vend_address,
-            "quantity": new_product.quantity,
-            "address": new_product.address,
-            "price_unit": new_product.price_unit
-        }), CREATED
+        return jsonify(new_product), CREATED
     
     except Exception as e:
         return jsonify({"message": "Internal server error", "error": str(e)}), INTERNAL_ERROR
@@ -106,28 +85,18 @@ def update_product():
         if not all(key in data for key in ["name", "vend", "quantity", "price_unit"]):
             return jsonify({"message": "Missing required fields"}), BAD_REQUEST
         
-        product = Product.query.get(product_id)
+        product = next((prod for prod in mock_products if prod["id"] == int(product_id)), None)
 
         if not product:
             return jsonify({"message": "Product not found"}), NOT_FOUND
 
-        product.name = data['name']
-        product.vend = data['vend']
-        product.vend_address = data['vend_address']
-        product.quantity = data['quantity']
-        product.price_unit = data['price_unit']
+        product["name"] = data['name']
+        product["vend"] = data['vend']
+        product["vend_address"] = data['vend_address']
+        product["quantity"] = data['quantity']
+        product["price_unit"] = data['price_unit']
 
-        db.session.commit()
-
-        return jsonify({
-            "id": product.id,
-            "name": product.name,
-            "vend": product.vend,
-            "vend_address": product.vend_address,
-            "quantity": product.quantity,
-            "address": product.address,
-            "price_unit": product.price_unit
-        }), SUCCESS
+        return jsonify(product), SUCCESS
     
     except Exception as e:
         return jsonify({"message": "Internal server error", "error": str(e)}), INTERNAL_ERROR
@@ -141,13 +110,12 @@ def delete_product():
         if not product_id:
             return jsonify({"message": "Product ID is required"}), BAD_REQUEST
         
-        product = Product.query.get(product_id)
-
+        product = next((prod for prod in mock_products if prod["id"] == product_id), None)
+        
         if not product:
             return jsonify({"message": "Product not found"}), NOT_FOUND
-
-        db.session.delete(product)
-        db.session.commit()
+        
+        mock_products.remove(product)
 
         return jsonify({"message": "Product deleted successfully"}), SUCCESS
     
